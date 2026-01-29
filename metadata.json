@@ -1,0 +1,5 @@
+{
+  "name": "QuizMaster Live",
+  "description": "A real-time, multi-role quiz show platform. Features a Host dashboard for game management (with AI question generation), a mobile-first Player buzzer interface, and a cinematic Spectator display.",
+  "requestFramePermissions": []
+}
