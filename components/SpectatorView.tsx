@@ -6,7 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { Trophy, Zap, Users } from 'lucide-react';
 
 export const SpectatorView: React.FC = () => {
-  const { gameState, questions, teams, players, buzzQueue } = useGame();
+  const { gameState, questions, teams, players, buzzQueue, joinUrl } = useGame();
   const currentQ = questions[gameState.currentQuestionIndex];
 
   // Helper to get formatted leaderboard data
@@ -29,10 +29,11 @@ export const SpectatorView: React.FC = () => {
             <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mb-8">
               JOIN THE QUIZ
             </h1>
-            <div className="bg-white p-4 inline-block rounded-xl mb-8">
-               <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://quiz-app-demo.com" alt="QR Code" className="w-48 h-48" />
+            <div className="bg-white p-4 inline-block rounded-xl mb-4">
+               <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}`} alt="QR Code" className="w-48 h-48" />
             </div>
-            <p className="text-2xl text-slate-300 mb-8">Scan to Join</p>
+            <p className="text-2xl text-slate-300 mb-2">Scan to Join</p>
+            <p className="text-lg text-slate-500 font-mono mb-8">{joinUrl}</p>
             
             <div className="flex flex-wrap justify-center gap-4 max-w-4xl mx-auto">
               {players.filter(p => p.isApproved).map(p => (

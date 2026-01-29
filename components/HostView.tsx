@@ -3,13 +3,13 @@ import { useGame } from '../context/GameContext';
 import { GamePhase } from '../types';
 import type { Question } from '../types';
 import { Soundboard } from './Soundboard';
-import { Play, SkipForward, CheckCircle, XCircle, Users, Library, Sparkles, Plus, Trash2, Edit, ArrowLeft, Upload, RefreshCw, Image as ImageIcon, List, Trophy, RotateCcw } from 'lucide-react';
+import { Play, SkipForward, CheckCircle, XCircle, Users, Library, Sparkles, Plus, Trash2, Edit, ArrowLeft, Upload, RefreshCw, Image as ImageIcon, List, Trophy, RotateCcw, QrCode } from 'lucide-react';
 import { generateQuestions } from '../services/geminiService';
 
 export const HostView: React.FC = () => {
   const { 
-    gameState, activeGameName, players, teams, buzzQueue, questions, games,
-    approvePlayer, startGame, startCountdown, openBuzzers, 
+    gameState, activeGameName, players, teams, buzzQueue, questions, games, joinUrl,
+    setJoinUrl, approvePlayer, startGame, startCountdown, openBuzzers, 
     resolveBuzz, rectifyBuzz, skipQuestion, nextPhase, resetGame,
     createGame, updateGame, deleteGame, loadGameToLive
   } = useGame();
@@ -189,6 +189,23 @@ export const HostView: React.FC = () => {
             {/* GAME CONTROL TAB */}
             {activeTab === 'GAME' && (
               <div className="max-w-4xl mx-auto">
+                 {/* Session Settings */}
+                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex items-center gap-4">
+                     <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
+                         <QrCode size={20} />
+                     </div>
+                     <div className="flex-1">
+                         <label className="block text-xs font-bold text-slate-500 uppercase">Player Join URL (for QR Code)</label>
+                         <input 
+                            type="text" 
+                            value={joinUrl}
+                            onChange={(e) => setJoinUrl(e.target.value)}
+                            className="w-full font-mono text-sm border-b border-slate-300 focus:border-indigo-600 outline-none bg-transparent py-1 text-slate-800"
+                            placeholder="https://..."
+                         />
+                     </div>
+                 </div>
+
                  {/* LAST QUESTION WARNING */}
                  {isLastQuestionPhase && !isGameOver && (
                      <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-700 p-4 mb-6 font-bold shadow-sm">

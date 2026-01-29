@@ -1,3 +1,4 @@
+
 export const GamePhase = {
   LOBBY: 'LOBBY',
   COUNTDOWN: 'COUNTDOWN',
@@ -66,4 +67,11 @@ export interface GameState {
   currentQuestionIndex: number;
   countdownValue: number;
   buzzerOpenTimestamp: number | null; // To calculate reaction time
+}
+
+// Synchronization Types
+export interface PlayerIntent {
+  type: 'JOIN' | 'BUZZ' | 'LEAVE';
+  payload: any;
+  created_at?: string;
 }
