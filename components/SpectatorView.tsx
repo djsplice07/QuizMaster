@@ -1,6 +1,7 @@
 import React from 'react';
 import { useGame } from '../context/GameContext';
 import { GamePhase } from '../types';
+import type { Player } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Trophy, Zap, Users } from 'lucide-react';
 
@@ -126,7 +127,7 @@ export const SpectatorView: React.FC = () => {
                     <YAxis dataKey="name" type="category" width={150} tick={{fill: 'white', fontSize: 20}} />
                     <Tooltip cursor={{fill: 'transparent'}} contentStyle={{backgroundColor: '#1e293b', color: '#fff', border: 'none'}} />
                     <Bar dataKey="score" radius={[0, 10, 10, 0]}>
-                      {leaderboardData.map((entry, index) => (
+                      {leaderboardData.map((_entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Bar>
@@ -145,7 +146,7 @@ export const SpectatorView: React.FC = () => {
         const topPlayers = [...players].sort((a,b) => b.score - a.score).slice(0, 5);
 
         // Fastest Buzzer Calculation
-        let fastestPlayer = null;
+        let fastestPlayer: Player | null = null;
         let fastestTime = Infinity;
         players.forEach(p => {
             if (p.stats.bestReactionTime && p.stats.bestReactionTime < fastestTime) {
@@ -202,7 +203,7 @@ export const SpectatorView: React.FC = () => {
                              </div>
                              <div className="text-left">
                                  <div className="text-blue-300 font-bold uppercase tracking-wider text-sm">Fastest Finger</div>
-                                 <div className="text-2xl font-bold text-white">{fastestPlayer?.name || '-'}</div>
+                                 <div className="text-2xl font-bold text-white">{(fastestPlayer as Player)?.name || '-'}</div>
                              </div>
                          </div>
                          <div className="text-4xl font-mono font-bold text-blue-400">

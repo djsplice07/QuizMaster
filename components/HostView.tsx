@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { GamePhase, Game, Question } from '../types';
+import { GamePhase } from '../types';
+import type { Question } from '../types';
 import { Soundboard } from './Soundboard';
-import { Play, SkipForward, CheckCircle, XCircle, Users, Library, Sparkles, Plus, Trash2, Edit, Save, ArrowLeft, Upload, RefreshCw, Image as ImageIcon, List, Trophy, RotateCcw } from 'lucide-react';
+import { Play, SkipForward, CheckCircle, XCircle, Users, Library, Sparkles, Plus, Trash2, Edit, ArrowLeft, Upload, RefreshCw, Image as ImageIcon, List, Trophy, RotateCcw } from 'lucide-react';
 import { generateQuestions } from '../services/geminiService';
 
 export const HostView: React.FC = () => {

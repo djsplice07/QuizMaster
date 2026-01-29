@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Question } from "../types";
+import type { Question } from "../types";
 
 const generateQuestions = async (topic: string, count: number = 5): Promise<Question[]> => {
   // Use process.env.API_KEY as per guidelines.

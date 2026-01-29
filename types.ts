@@ -1,13 +1,15 @@
-export enum GamePhase {
-  LOBBY = 'LOBBY',
-  COUNTDOWN = 'COUNTDOWN',
-  QUESTION_DISPLAY = 'QUESTION_DISPLAY',
-  BUZZER_OPEN = 'BUZZER_OPEN',
-  ADJUDICATION = 'ADJUDICATION',
-  ANSWER_REVEAL = 'ANSWER_REVEAL',
-  LEADERBOARD = 'LEADERBOARD',
-  FINAL_STATS = 'FINAL_STATS'
-}
+export const GamePhase = {
+  LOBBY: 'LOBBY',
+  COUNTDOWN: 'COUNTDOWN',
+  QUESTION_DISPLAY: 'QUESTION_DISPLAY',
+  BUZZER_OPEN: 'BUZZER_OPEN',
+  ADJUDICATION: 'ADJUDICATION',
+  ANSWER_REVEAL: 'ANSWER_REVEAL',
+  LEADERBOARD: 'LEADERBOARD',
+  FINAL_STATS: 'FINAL_STATS'
+} as const;
+
+export type GamePhase = typeof GamePhase[keyof typeof GamePhase];
 
 export interface PlayerStats {
   correctAnswers: number;

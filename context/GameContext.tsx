@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { GamePhase, Player, Team, Question, BuzzerLog, GameState, Game } from '../types';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { GamePhase } from '../types';
+import type { Player, Team, Question, BuzzerLog, GameState, Game } from '../types';
 
 interface GameContextType {
   // State

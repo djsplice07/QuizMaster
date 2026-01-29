@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { GamePhase } from '../types';
-import { Trophy, Zap, Target, LogOut, Image as ImageIcon } from 'lucide-react';
+import type { Player } from '../types';
+import { Trophy, Zap, LogOut } from 'lucide-react';
 
 export const PlayerView: React.FC = () => {
   const { gameState, players, teams, currentPlayerId, addPlayer, removePlayer, buzzQueue, handleBuzz, questions } = useGame();
@@ -149,7 +150,7 @@ export const PlayerView: React.FC = () => {
   if (gameState.phase === GamePhase.FINAL_STATS) {
       const winningTeam = sortedTeams[0];
       
-      let fastestPlayer = null;
+      let fastestPlayer: Player | null = null;
       let fastestTime = Infinity;
       players.forEach(p => {
           if (p.stats.bestReactionTime && p.stats.bestReactionTime < fastestTime) {
@@ -188,7 +189,7 @@ export const PlayerView: React.FC = () => {
                         </div>
                         <div>
                             <div className="text-slate-400 text-xs font-bold uppercase">Fastest Buzzer</div>
-                            <div className="text-white font-bold text-lg">{fastestPlayer.name}</div>
+                            <div className="text-white font-bold text-lg">{(fastestPlayer as Player).name}</div>
                             <div className="text-blue-400 font-mono text-sm">{(fastestTime / 1000).toFixed(2)}s reaction</div>
                         </div>
                     </div>
@@ -227,6 +228,8 @@ export const PlayerView: React.FC = () => {
       );
   }
 
+  const isGameActive = gameState.phase !== GamePhase.LOBBY && gameState.phase !== GamePhase.LEADERBOARD;
+
   // --- REGULAR GAMEPLAY UI ---
   return (
     <div className="h-full bg-slate-800 flex flex-col overflow-y-auto">
@@ -259,7 +262,7 @@ export const PlayerView: React.FC = () => {
       <div className="flex-1 flex flex-col items-center justify-center p-6 relative">
         
         {/* Dynamic Question Text & Media on Mobile */}
-        {gameState.phase !== GamePhase.LOBBY && gameState.phase !== GamePhase.LEADERBOARD && gameState.phase !== GamePhase.FINAL_STATS && currentQ && (
+        {isGameActive && currentQ && (
            <div className="absolute top-4 left-4 right-4 text-center">
               <p className="text-slate-300 text-sm uppercase tracking-widest mb-2">Current Question</p>
               
