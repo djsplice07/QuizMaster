@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { GameProvider } from './context/GameContext';
-import { HostView } from './components/HostView';
-import { PlayerView } from './components/PlayerView';
-import { SpectatorView } from './components/SpectatorView';
-import { Monitor, Smartphone, LayoutDashboard } from 'lucide-react';
+import { Monitor, Smartphone, LayoutDashboard, Loader2 } from 'lucide-react';
+
+// Lazy load components to reduce initial bundle size
+const HostView = React.lazy(() => import('./components/HostView').then(module => ({ default: module.HostView })));
+const PlayerView = React.lazy(() => import('./components/PlayerView').then(module => ({ default: module.PlayerView })));
+const SpectatorView = React.lazy(() => import('./components/SpectatorView').then(module => ({ default: module.SpectatorView })));
 
 const App: React.FC = () => {
   const [view, setView] = useState<'HOST' | 'PLAYER' | 'SPECTATOR'>('SPECTATOR');
@@ -70,7 +72,14 @@ const App: React.FC = () => {
 
         {/* Main Content Area */}
         <div className="flex-1 relative w-full h-full overflow-hidden">
-          {renderView()}
+          <Suspense fallback={
+            <div className="h-full w-full flex flex-col items-center justify-center text-slate-500 gap-4">
+              <Loader2 className="animate-spin w-12 h-12 text-indigo-500" />
+              <p>Loading Quiz Module...</p>
+            </div>
+          }>
+            {renderView()}
+          </Suspense>
         </div>
       </div>
     </GameProvider>

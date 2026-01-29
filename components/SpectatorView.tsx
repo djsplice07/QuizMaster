@@ -145,15 +145,17 @@ export const SpectatorView: React.FC = () => {
         // Top 5 Players
         const topPlayers = [...players].sort((a,b) => b.score - a.score).slice(0, 5);
 
-        // Fastest Buzzer Calculation
-        let fastestPlayer: Player | null = null;
-        let fastestTime = Infinity;
-        players.forEach(p => {
-            if (p.stats.bestReactionTime && p.stats.bestReactionTime < fastestTime) {
-                fastestTime = p.stats.bestReactionTime;
-                fastestPlayer = p;
+        // Fastest Buzzer Calculation using reduce with explicit generic type
+        const fastestPlayer = players.reduce<Player | null>((best, p) => {
+            const pTime = p.stats.bestReactionTime;
+            if (!pTime) return best;
+            if (!best || !best.stats.bestReactionTime || pTime < best.stats.bestReactionTime) {
+                return p;
             }
-        });
+            return best;
+        }, null);
+
+        const fastestTime = fastestPlayer?.stats.bestReactionTime ?? Infinity;
 
         return (
           <div className="text-center w-full max-w-6xl mx-auto pb-10 overflow-y-auto h-full">
@@ -203,7 +205,7 @@ export const SpectatorView: React.FC = () => {
                              </div>
                              <div className="text-left">
                                  <div className="text-blue-300 font-bold uppercase tracking-wider text-sm">Fastest Finger</div>
-                                 <div className="text-2xl font-bold text-white">{(fastestPlayer as Player)?.name || '-'}</div>
+                                 <div className="text-2xl font-bold text-white">{fastestPlayer ? fastestPlayer.name : '-'}</div>
                              </div>
                          </div>
                          <div className="text-4xl font-mono font-bold text-blue-400">
