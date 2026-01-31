@@ -22,7 +22,6 @@ $options = [
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
 } catch (\PDOException $e) {
-    // Fallback for when DB isn't configured yet so app doesn't crash completely
     echo json_encode(['error' => 'Database connection failed: ' . $e->getMessage()]);
     exit;
 }
@@ -43,20 +42,23 @@ try {
             echo $row['game_data'] ?: '{}';
         } 
         elseif ($action === 'getIntents') {
-            // Transaction to read and delete to ensure processed once
             $pdo->beginTransaction();
             $stmt = $pdo->query("SELECT * FROM player_intents ORDER BY created_at ASC");
             $intents = $stmt->fetchAll();
             if ($intents) {
-                $pdo->exec("DELETE FROM player_intents"); // Clear queue after reading
+                $pdo->exec("DELETE FROM player_intents"); 
             }
             $pdo->commit();
-            
-            // Parse payloads
             foreach ($intents as &$intent) {
                 $intent['payload'] = json_decode($intent['payload'], true);
             }
             echo json_encode($intents);
+        }
+        elseif ($action === 'getPublicSettings') {
+            // Only return the Join URL for public clients (Spectators/Players)
+            $stmt = $pdo->query("SELECT join_url FROM settings WHERE id = 1");
+            $row = $stmt->fetch();
+            echo json_encode(['joinUrl' => $row['join_url'] ?? '']);
         }
     } 
     elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -71,6 +73,52 @@ try {
             $payload = json_encode($input['payload']);
             $stmt = $pdo->prepare("INSERT INTO player_intents (type, payload) VALUES (?, ?)");
             $stmt->execute([$type, $payload]);
+            echo json_encode(['success' => true]);
+        }
+        elseif ($action === 'login') {
+            $password = $input['password'];
+            $stmt = $pdo->query("SELECT * FROM settings WHERE id = 1");
+            $row = $stmt->fetch();
+            
+            $loginSuccess = false;
+
+            if ($row) {
+                // 1. Check secure hash
+                if (password_verify($password, $row['admin_password'])) {
+                    $loginSuccess = true;
+                }
+                // 2. Check plaintext fallback (First Run / Recovery)
+                elseif ($row['admin_password'] === $password) {
+                    $loginSuccess = true;
+                    // Auto-upgrade to secure hash
+                    $newHash = password_hash($password, PASSWORD_DEFAULT);
+                    $upd = $pdo->prepare("UPDATE settings SET admin_password = ? WHERE id = 1");
+                    $upd->execute([$newHash]);
+                }
+            }
+            
+            if ($loginSuccess) {
+                echo json_encode([
+                    'success' => true, 
+                    'apiKey' => $row['api_key'], 
+                    'joinUrl' => $row['join_url']
+                ]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Invalid password']);
+            }
+        }
+        elseif ($action === 'updateSettings') {
+            $sql = "UPDATE settings SET api_key = ?, join_url = ? WHERE id = 1";
+            $params = [$input['apiKey'], $input['joinUrl']];
+            
+            if (!empty($input['newPassword'])) {
+                $sql = "UPDATE settings SET api_key = ?, join_url = ?, admin_password = ? WHERE id = 1";
+                $hash = password_hash($input['newPassword'], PASSWORD_DEFAULT);
+                $params[] = $hash;
+            }
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
             echo json_encode(['success' => true]);
         }
     }

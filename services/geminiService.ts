@@ -1,12 +1,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Question } from "../types";
 
-const generateQuestions = async (topic: string, count: number = 5): Promise<Question[]> => {
-  // Use process.env.API_KEY as per guidelines.
-  const apiKey = process.env.API_KEY;
-
+const generateQuestions = async (topic: string, apiKey: string, count: number = 5): Promise<Question[]> => {
   if (!apiKey) {
-    console.error("API Key is missing. Check your .env file.");
+    console.error("API Key is missing. Please configure it in Host Settings.");
     return [];
   }
 

@@ -1,24 +1,68 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
-import { Monitor, Smartphone, LayoutDashboard, Loader2, RefreshCw } from 'lucide-react';
+import { Monitor, Smartphone, LayoutDashboard, Loader2, RefreshCw, Lock } from 'lucide-react';
 
-// Lazy load components to reduce initial bundle size
 const HostView = React.lazy(() => import('./components/HostView').then(module => ({ default: module.HostView })));
 const PlayerView = React.lazy(() => import('./components/PlayerView').then(module => ({ default: module.PlayerView })));
 const SpectatorView = React.lazy(() => import('./components/SpectatorView').then(module => ({ default: module.SpectatorView })));
 
-// Inner Component to access Context
+const LoginScreen: React.FC = () => {
+    const { login } = useGame();
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError('');
+        const success = await login(password);
+        if (!success) {
+            setError('Invalid Password');
+        }
+        setLoading(false);
+    };
+
+    return (
+        <div className="flex items-center justify-center h-full bg-slate-900">
+            <div className="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full">
+                <div className="flex justify-center mb-6 text-indigo-600">
+                    <Lock size={48} />
+                </div>
+                <h2 className="text-2xl font-bold text-center text-slate-800 mb-6">Host Access</h2>
+                <form onSubmit={handleSubmit}>
+                    <input 
+                        type="password" 
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full p-3 border border-slate-300 rounded-lg mb-4 text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                        placeholder="Enter Admin Password"
+                        autoFocus
+                    />
+                    {error && <p className="text-red-500 text-sm mb-4 text-center font-bold">{error}</p>}
+                    <button 
+                        type="submit" 
+                        disabled={loading}
+                        className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                    >
+                        {loading ? 'Verifying...' : 'Login'}
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 const AppContent: React.FC = () => {
-  const { setIsHost, isSyncing, isHost } = useGame();
+  const { setIsHost, isSyncing, isAuthenticated } = useGame();
   const [view, setView] = useState<'HOST' | 'PLAYER' | 'SPECTATOR'>('SPECTATOR');
 
-  // Simple hash routing for demo purposes
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash;
       if (hash === '#host') {
         setView('HOST');
-        setIsHost(true); // Promote this session to Host Authority
+        setIsHost(true);
       }
       else if (hash === '#player') {
         setView('PLAYER');
@@ -42,7 +86,8 @@ const AppContent: React.FC = () => {
 
   const renderView = () => {
     switch (view) {
-      case 'HOST': return <HostView />;
+      case 'HOST': 
+        return isAuthenticated ? <HostView /> : <LoginScreen />;
       case 'PLAYER': return <PlayerView />;
       case 'SPECTATOR': return <SpectatorView />;
       default: return <SpectatorView />;

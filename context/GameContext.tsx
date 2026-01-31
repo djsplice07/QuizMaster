@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { GamePhase } from '../types';
-import type { Player, Team, Question, BuzzerLog, GameState, Game, PlayerIntent } from '../types';
+import type { Player, Team, Question, BuzzerLog, GameState, Game } from '../types';
 
 interface GameContextType {
   // State
   gameState: GameState;
   activeGameName: string; 
   joinUrl: string;
+  apiKey: string;
   players: Player[];
   teams: Team[];
   questions: Question[];
@@ -14,13 +15,15 @@ interface GameContextType {
   buzzQueue: BuzzerLog[];
   currentPlayerId: string | null;
   
-  // Sync Status
+  // Auth & Sync Status
   isHost: boolean;
+  isAuthenticated: boolean;
   setIsHost: (isHost: boolean) => void;
+  login: (password: string) => Promise<boolean>;
+  updateSettings: (newApiKey: string, newJoinUrl: string, newPassword?: string) => Promise<void>;
   isSyncing: boolean;
 
   // Actions
-  setJoinUrl: (url: string) => void;
   addPlayer: (name: string, teamName: string) => void;
   approvePlayer: (playerId: string) => void;
   removePlayer: (playerId: string) => void;
@@ -42,13 +45,11 @@ interface GameContextType {
   updateGame: (gameId: string, updates: Partial<Game>) => void;
   deleteGame: (gameId: string) => void;
   loadGameToLive: (gameId: string) => void;
+  setJoinUrl: (url: string) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
-// --- API CONFIG ---
-// Assuming api.php is at the root. Change if in a subfolder.
-// If using Vite development server, you might need to point this to your actual PHP server URL.
 const API_URL = import.meta.env.DEV ? 'http://localhost/quiz/api.php' : './api.php'; 
 
 // Initial Mock Data
@@ -81,6 +82,7 @@ const INITIAL_GAMES: Game[] = [
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isHost, setIsHost] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // --- GAME STATE ---
@@ -93,6 +95,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [activeGameName, setActiveGameName] = useState<string>("General Knowledge Demo");
   const [joinUrl, setJoinUrl] = useState<string>('');
+  const [apiKey, setApiKey] = useState<string>('');
   const [players, setPlayers] = useState<Player[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [questions, setQuestionsQuestions] = useState<Question[]>(INITIAL_QUESTIONS);
@@ -100,42 +103,83 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [buzzQueue, setBuzzQueue] = useState<BuzzerLog[]>([]);
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
 
-  // Refs for accessing state inside intervals without dependencies
-  const stateRef = useRef({ gameState, players, teams, questions, activeGameName, buzzQueue, joinUrl });
+  const stateRef = useRef({ gameState, players, teams, questions, activeGameName, buzzQueue, joinUrl, apiKey });
   useEffect(() => {
-    stateRef.current = { gameState, players, teams, questions, activeGameName, buzzQueue, joinUrl };
-  }, [gameState, players, teams, questions, activeGameName, buzzQueue, joinUrl]);
+    stateRef.current = { gameState, players, teams, questions, activeGameName, buzzQueue, joinUrl, apiKey };
+  }, [gameState, players, teams, questions, activeGameName, buzzQueue, joinUrl, apiKey]);
 
-  // Set default Join URL on mount
+  // Initial Fetch for Clients (Spectators/Players) to get Join URL without login
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-        const url = `${window.location.origin}${window.location.pathname}#player`;
-        setJoinUrl(url);
-    }
-  }, []);
+    const fetchPublicSettings = async () => {
+        try {
+            const response = await fetch(`${API_URL}?action=getPublicSettings`);
+            const data = await response.json();
+            if (data.joinUrl) setJoinUrl(data.joinUrl);
+            else {
+                // Default if empty
+                if (typeof window !== 'undefined') {
+                    setJoinUrl(`${window.location.origin}${window.location.pathname}#player`);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch public settings", e);
+        }
+    };
+    if (!isHost) fetchPublicSettings();
+  }, [isHost]);
+
+  // --- AUTHENTICATION ---
+  const login = async (password: string): Promise<boolean> => {
+      try {
+          const response = await fetch(`${API_URL}?action=login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ password })
+          });
+          const data = await response.json();
+          if (data.success) {
+              setIsAuthenticated(true);
+              setApiKey(data.apiKey || '');
+              if (data.joinUrl) setJoinUrl(data.joinUrl);
+              return true;
+          }
+          return false;
+      } catch (e) {
+          console.error(e);
+          return false;
+      }
+  };
+
+  const updateSettings = async (newApiKey: string, newJoinUrl: string, newPassword?: string) => {
+      try {
+          await fetch(`${API_URL}?action=updateSettings`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ apiKey: newApiKey, joinUrl: newJoinUrl, newPassword })
+          });
+          setApiKey(newApiKey);
+          setJoinUrl(newJoinUrl);
+      } catch (e) {
+          console.error("Failed to update settings", e);
+      }
+  };
 
   // --- SYNC ENGINE ---
   useEffect(() => {
     const syncInterval = setInterval(async () => {
       setIsSyncing(true);
       try {
-        if (isHost) {
-          // --- HOST LOGIC: PULL INTENTS -> PROCESS -> PUSH STATE ---
-          
-          // 1. Fetch Intents
+        if (isHost && isAuthenticated) {
+          // --- HOST LOGIC ---
           const response = await fetch(`${API_URL}?action=getIntents`);
           const intents = await response.json();
           
-          let stateChanged = false;
-
-          // 2. Process Intents
           if (Array.isArray(intents) && intents.length > 0) {
              console.log("Processing Intents:", intents);
              intents.forEach((item: any) => {
                 const { type, payload } = item;
                 
                 if (type === 'JOIN') {
-                   // Logic extracted from addPlayer
                    const { name, teamName, tempId } = payload;
                    const currentTeams = stateRef.current.teams;
                    const existingTeam = currentTeams.find(t => t.name.toLowerCase() === teamName.toLowerCase());
@@ -147,7 +191,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                       teamId = newTeam.id;
                    }
                    
-                   // Check if player already exists to prevent dupes
                    const exists = stateRef.current.players.some(p => p.name === name && p.teamId === teamId);
                    if (!exists && teamId) {
                       const newPlayer: Player = {
@@ -155,12 +198,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         name,
                         teamId,
                         score: 0,
-                        isApproved: true, // Auto approve for now for smoother UX
+                        isApproved: true,
                         stats: { correctAnswers: 0, totalBuzzes: 0, bestReactionTime: null }
                       };
                       setPlayers(prev => [...prev, newPlayer]);
                    }
-                   stateChanged = true;
                 }
                 else if (type === 'BUZZ') {
                     const { playerId } = payload;
@@ -176,24 +218,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         };
                         setBuzzQueue(prev => {
                             const updated = [...prev, newBuzz];
-                             if (updated.length === 1) { // Only force update phase if it was the first buzz
+                             if (updated.length === 1) { 
                                  setGameState(gs => ({ ...gs, phase: GamePhase.ADJUDICATION }));
                              }
                             return updated;
                         });
-                        stateChanged = true;
                     }
                 }
                 else if (type === 'LEAVE') {
                    const { playerId } = payload;
                    setPlayers(prev => prev.filter(p => p.id !== playerId));
-                   stateChanged = true;
                 }
              });
           }
 
-          // 3. Push State (Always push to keep server alive with latest data, or at least periodically)
-          // For now, we push every cycle to ensure consistency.
           const fullState = {
               gameState: stateRef.current.gameState,
               players: stateRef.current.players,
@@ -201,7 +239,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               questions: stateRef.current.questions,
               activeGameName: stateRef.current.activeGameName,
               buzzQueue: stateRef.current.buzzQueue,
-              joinUrl: stateRef.current.joinUrl
+              // Note: We don't push settings (joinUrl/apiKey) to game_state to avoid leaking credentials to clients polling getState
           };
 
           await fetch(`${API_URL}?action=pushState`, {
@@ -211,7 +249,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
 
         } else {
-          // --- CLIENT LOGIC: PULL STATE -> UPDATE LOCAL ---
+          // --- CLIENT LOGIC ---
           const response = await fetch(`${API_URL}?action=getState`);
           const remoteState = await response.json();
           
@@ -222,7 +260,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setQuestionsQuestions(remoteState.questions || []);
               setActiveGameName(remoteState.activeGameName || "");
               setBuzzQueue(remoteState.buzzQueue || []);
-              setJoinUrl(remoteState.joinUrl || "");
+              // Clients don't receive joinUrl from game_state loop, they get it from getPublicSettings
           }
         }
       } catch (e) {
@@ -230,20 +268,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } finally {
         setIsSyncing(false);
       }
-    }, 500); // 500ms polling rate
+    }, 500); 
 
     return () => clearInterval(syncInterval);
-  }, [isHost]); // Re-run effect if role changes
-
-
-  // --- HOST HELPERS (Local) ---
-  const getOrCreateTeam = (name: string) => {
-    const existing = teams.find(t => t.name.toLowerCase() === name.toLowerCase());
-    if (existing) return existing;
-    const newTeam: Team = { id: crypto.randomUUID(), name, score: 0 };
-    setTeams(prev => [...prev, newTeam]);
-    return newTeam;
-  };
+  }, [isHost, isAuthenticated]);
 
   // --- ACTIONS ---
 
@@ -260,14 +288,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addPlayer = (name: string, teamName: string) => {
-    // If Host, do it immediately (Old Logic) - Although now logic is in Sync Loop
-    // To make it unified, Host also sends intent OR we just trust the sync loop.
-    // BUT, for "Host-Added Players", we can just do it locally.
-    // For "Client Joining", they send intent.
-    
-    // PLAYER-SIDE LOGIC:
     const tempId = crypto.randomUUID();
-    setCurrentPlayerId(tempId); // Set ID immediately so UI shows "Waiting..."
+    setCurrentPlayerId(tempId);
     sendIntent('JOIN', { name, teamName, tempId });
   };
 
@@ -275,7 +297,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isHost) {
         setPlayers(prev => prev.filter(p => p.id !== playerId));
     } else {
-        // Player leaving
         sendIntent('LEAVE', { playerId });
         if (currentPlayerId === playerId) setCurrentPlayerId(null);
     }
@@ -288,7 +309,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const handleBuzz = (playerId: string) => {
     if (isHost) {
-        // Host manual buzz? Rare, but allowed.
         if (gameState.phase !== GamePhase.BUZZER_OPEN) return;
         if (buzzQueue.find(b => b.playerId === playerId)) return;
         const newBuzz: BuzzerLog = {
@@ -302,12 +322,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setGameState(prev => ({ ...prev, phase: GamePhase.ADJUDICATION }));
         }
     } else {
-        // Client buzz
         sendIntent('BUZZ', { playerId });
     }
   };
-
-  // --- HOST ONLY ACTIONS (No change needed, just guard them) ---
   
   const startGame = () => {
     if (!isHost) return;
@@ -339,7 +356,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setBuzzQueue([]);
   };
 
-  // Countdown Timer Effect (Runs on Host Only to drive state)
   useEffect(() => {
     if (!isHost) return;
     let timer: ReturnType<typeof setTimeout>;
@@ -443,7 +459,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const playAudio = (url: string, start: number = 0, end?: number) => {
-      // Audio is mostly local for now
       const audio = new Audio(url);
       audio.currentTime = start;
       audio.play();
@@ -468,8 +483,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTeams(prev => prev.map(t => ({ ...t, score: 0 })));
     setBuzzQueue([]);
   };
-
-  // --- LIBRARY ACTIONS (Local to Host) ---
 
   const createGame = (name: string) => {
       if (!isHost) return;
@@ -513,6 +526,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       gameState,
       activeGameName,
       joinUrl,
+      apiKey,
       players,
       teams,
       questions,
@@ -520,9 +534,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       buzzQueue,
       currentPlayerId,
       isHost,
+      isAuthenticated,
       setIsHost,
+      login,
+      updateSettings,
       isSyncing,
-      setJoinUrl,
       addPlayer,
       approvePlayer,
       removePlayer,
@@ -541,7 +557,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createGame,
       updateGame,
       deleteGame,
-      loadGameToLive
+      loadGameToLive,
+      setJoinUrl
     }}>
       {children}
     </GameContext.Provider>

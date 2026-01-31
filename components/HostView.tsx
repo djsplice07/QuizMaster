@@ -3,18 +3,18 @@ import { useGame } from '../context/GameContext';
 import { GamePhase } from '../types';
 import type { Question } from '../types';
 import { Soundboard } from './Soundboard';
-import { Play, SkipForward, CheckCircle, XCircle, Users, Library, Sparkles, Plus, Trash2, Edit, ArrowLeft, Upload, RefreshCw, Image as ImageIcon, List, Trophy, RotateCcw, QrCode } from 'lucide-react';
+import { Play, SkipForward, CheckCircle, XCircle, Users, Library, Sparkles, Plus, Trash2, Edit, ArrowLeft, Upload, RefreshCw, Image as ImageIcon, List, Trophy, RotateCcw, Settings, Save } from 'lucide-react';
 import { generateQuestions } from '../services/geminiService';
 
 export const HostView: React.FC = () => {
   const { 
-    gameState, activeGameName, players, teams, buzzQueue, questions, games, joinUrl,
-    setJoinUrl, approvePlayer, startGame, startCountdown, openBuzzers, 
+    gameState, activeGameName, players, teams, buzzQueue, questions, games, joinUrl, apiKey,
+    approvePlayer, startGame, startCountdown, openBuzzers, 
     resolveBuzz, rectifyBuzz, skipQuestion, nextPhase, resetGame,
-    createGame, updateGame, deleteGame, loadGameToLive
+    createGame, updateGame, deleteGame, loadGameToLive, updateSettings
   } = useGame();
 
-  const [activeTab, setActiveTab] = useState<'GAME' | 'PLAYERS' | 'LIBRARY'>('GAME');
+  const [activeTab, setActiveTab] = useState<'GAME' | 'PLAYERS' | 'LIBRARY' | 'SETTINGS'>('GAME');
   
   // Library State
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
@@ -26,10 +26,21 @@ export const HostView: React.FC = () => {
   const [isAddingQuestion, setIsAddingQuestion] = useState(false);
   const [manualQ, setManualQ] = useState({ text: '', answer: '', points: 10, category: '', mediaUrl: '' });
 
+  // Settings State
+  const [settingsForm, setSettingsForm] = useState({ 
+    joinUrl: joinUrl, 
+    apiKey: apiKey, 
+    newPassword: '' 
+  });
+  
+  // Update local form state when context changes
+  React.useEffect(() => {
+    setSettingsForm(prev => ({ ...prev, joinUrl: joinUrl, apiKey: apiKey }));
+  }, [joinUrl, apiKey]);
+
   const currentQ = questions[gameState.currentQuestionIndex];
   const isPreGame = gameState.currentQuestionIndex === -1;
   const isGameOver = gameState.currentQuestionIndex >= questions.length;
-  // Correctly identify if we have finished all questions and are just lingering on the last leaderboard
   const isLastQuestionPhase = gameState.currentQuestionIndex === questions.length - 1;
 
   // --- Handlers ---
@@ -44,7 +55,7 @@ export const HostView: React.FC = () => {
   const handleAiGenerate = async (gameId: string) => {
     if (!aiTopic) return;
     setIsGenerating(true);
-    const newQuestions = await generateQuestions(aiTopic);
+    const newQuestions = await generateQuestions(aiTopic, apiKey); // Pass apiKey
     if (newQuestions.length > 0) {
       const game = games.find(g => g.id === gameId);
       if (game) {
@@ -53,7 +64,7 @@ export const HostView: React.FC = () => {
       alert(`Added ${newQuestions.length} questions!`);
       setAiTopic('');
     } else {
-      alert("Failed to generate. Check API Key or try again.");
+      alert("Failed to generate. Check API Key in Settings.");
     }
     setIsGenerating(false);
   };
@@ -73,7 +84,6 @@ export const HostView: React.FC = () => {
       if (!manualQ.text || !manualQ.answer) return;
       const game = games.find(g => g.id === gameId);
       if (game) {
-          // Detect Media Type
           let mediaType: 'image' | 'video' | undefined = undefined;
           if (manualQ.mediaUrl) {
               if (manualQ.mediaUrl.startsWith('data:image') || manualQ.mediaUrl.match(/\.(jpeg|jpg|gif|png)$/i)) {
@@ -81,7 +91,6 @@ export const HostView: React.FC = () => {
               } else if (manualQ.mediaUrl.includes('youtube') || manualQ.mediaUrl.includes('youtu.be')) {
                   mediaType = 'video';
               } else {
-                  // Fallback assumption for uploads vs links
                   mediaType = 'image';
               }
           }
@@ -109,12 +118,16 @@ export const HostView: React.FC = () => {
   };
 
   const handleLoadGame = (gameId: string) => {
-      // Removed confirm() as it can block execution or be annoying
       loadGameToLive(gameId);
       setActiveTab('GAME');
   };
 
-  // Find the winner of the current round (if any)
+  const handleSaveSettings = () => {
+    updateSettings(settingsForm.apiKey, settingsForm.joinUrl, settingsForm.newPassword);
+    setSettingsForm(prev => ({ ...prev, newPassword: '' })); // Clear password field
+    alert("Settings Updated!");
+  };
+
   const currentWinnerBuzz = buzzQueue.find(b => b.status === 'CORRECT');
   const currentWinner = currentWinnerBuzz ? players.find(p => p.id === currentWinnerBuzz.playerId) : null;
 
@@ -127,7 +140,6 @@ export const HostView: React.FC = () => {
                 <div className="bg-indigo-600 text-white font-black px-2 py-1 rounded text-xl">QM</div>
                 <h1 className="font-bold text-lg text-slate-700">Host Dashboard</h1>
            </div>
-           {/* Active Game Display */}
            <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-indigo-50 border border-indigo-200 rounded-full shadow-sm">
                 <Library size={16} className="text-indigo-600" />
                 <span className="text-xs text-indigo-400 font-bold uppercase">ACTIVE GAME:</span>
@@ -155,7 +167,7 @@ export const HostView: React.FC = () => {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar - Navigation & Soundboard */}
+        {/* Left Sidebar */}
         <aside className="w-64 bg-slate-900 text-white flex flex-col overflow-y-auto">
            <nav className="p-4 space-y-2">
               <button 
@@ -176,6 +188,14 @@ export const HostView: React.FC = () => {
               >
                  <Library className="w-4 h-4" /> Game Library
               </button>
+              <div className="pt-4 mt-4 border-t border-slate-700">
+                <button 
+                    onClick={() => setActiveTab('SETTINGS')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded transition-colors ${activeTab === 'SETTINGS' ? 'bg-indigo-600' : 'hover:bg-slate-800'}`}
+                >
+                    <Settings className="w-4 h-4" /> Settings
+                </button>
+              </div>
            </nav>
            
            <div className="mt-auto p-4 border-t border-slate-800">
@@ -189,24 +209,6 @@ export const HostView: React.FC = () => {
             {/* GAME CONTROL TAB */}
             {activeTab === 'GAME' && (
               <div className="max-w-4xl mx-auto">
-                 {/* Session Settings */}
-                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex items-center gap-4">
-                     <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
-                         <QrCode size={20} />
-                     </div>
-                     <div className="flex-1">
-                         <label className="block text-xs font-bold text-slate-500 uppercase">Player Join URL (for QR Code)</label>
-                         <input 
-                            type="text" 
-                            value={joinUrl}
-                            onChange={(e) => setJoinUrl(e.target.value)}
-                            className="w-full font-mono text-sm border-b border-slate-300 focus:border-indigo-600 outline-none bg-transparent py-1 text-slate-800"
-                            placeholder="https://..."
-                         />
-                     </div>
-                 </div>
-
-                 {/* LAST QUESTION WARNING */}
                  {isLastQuestionPhase && !isGameOver && (
                      <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-700 p-4 mb-6 font-bold shadow-sm">
                          ⚠️ THIS IS THE LAST QUESTION!
@@ -253,15 +255,13 @@ export const HostView: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Controls based on Phase */}
+                    {/* Controls */}
                     <div className="flex flex-wrap gap-4 border-t border-slate-100 pt-6">
                         {gameState.phase === GamePhase.LOBBY && (
                             <button onClick={startGame} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold shadow-lg transition-all">
                                 START GAME
                             </button>
                         )}
-
-                        {/* Button logic for moving to next question OR finishing game */}
                         {(gameState.phase === GamePhase.LEADERBOARD || gameState.phase === GamePhase.LOBBY) && !isGameOver && (
                             isLastQuestionPhase && gameState.phase === GamePhase.LEADERBOARD ? (
                                 <button onClick={startCountdown} className="bg-indigo-800 hover:bg-indigo-900 text-white px-6 py-3 rounded-lg font-bold shadow-lg flex items-center gap-2 animate-pulse">
@@ -273,23 +273,18 @@ export const HostView: React.FC = () => {
                                 </button>
                             )
                         )}
-
                         {gameState.phase === GamePhase.QUESTION_DISPLAY && (
                             <button onClick={openBuzzers} className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg font-bold shadow-lg animate-pulse">
                                 OPEN BUZZERS
                             </button>
                         )}
-
-                        {/* Skip/Reveal Button */}
                         {(gameState.phase === GamePhase.QUESTION_DISPLAY || gameState.phase === GamePhase.BUZZER_OPEN || gameState.phase === GamePhase.ADJUDICATION) && (
                             <button onClick={skipQuestion} className="bg-slate-500 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-bold shadow-lg flex items-center gap-2 ml-auto">
                                 <SkipForward className="w-4 h-4" /> Reveal Answer
                             </button>
                         )}
-
                         {gameState.phase === GamePhase.ANSWER_REVEAL && (
                             <div className="flex w-full justify-between items-center">
-                                {/* UNDO BUTTON */}
                                 {currentWinner && (
                                     <button 
                                         onClick={() => rectifyBuzz(currentWinner.id, 'WRONG')}
@@ -299,7 +294,6 @@ export const HostView: React.FC = () => {
                                         Undo Correct ({currentWinner.name})
                                     </button>
                                 )}
-                                
                                 <button onClick={nextPhase} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-lg font-bold shadow-lg flex items-center gap-2 ml-auto">
                                     <SkipForward className="w-4 h-4" /> 
                                     {isLastQuestionPhase ? 'Finish Game' : 'Show Scores'}
@@ -309,7 +303,7 @@ export const HostView: React.FC = () => {
                     </div>
                  </div>
 
-                 {/* QUESTION QUEUE PREVIEW (Added for better Host visibility) */}
+                 {/* Queue & Buzzer Panels */}
                  {isPreGame && questions.length > 0 && (
                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-8">
                         <div className="flex items-center gap-2 mb-3 text-slate-500 border-b border-slate-100 pb-2">
@@ -326,8 +320,6 @@ export const HostView: React.FC = () => {
                         </ul>
                      </div>
                  )}
-
-                 {/* Buzzer Queue Adjudication */}
                  {buzzQueue.length > 0 && (
                      <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
                         <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
@@ -338,7 +330,6 @@ export const HostView: React.FC = () => {
                             {buzzQueue.map((buzz, idx) => {
                                 const player = players.find(p => p.id === buzz.playerId);
                                 const isCurrent = idx === 0 && buzz.status === 'PENDING';
-                                
                                 return (
                                     <div key={buzz.playerId} className={`px-6 py-4 flex items-center justify-between ${isCurrent ? 'bg-yellow-50' : ''}`}>
                                         <div className="flex items-center gap-4">
@@ -348,7 +339,6 @@ export const HostView: React.FC = () => {
                                                 <div className="text-xs text-slate-500">{(buzz.timestamp % 10000)}ms</div>
                                             </div>
                                         </div>
-                                        
                                         <div className="flex items-center gap-2">
                                             {buzz.status === 'PENDING' ? (
                                                 isCurrent ? (
@@ -374,7 +364,6 @@ export const HostView: React.FC = () => {
                                                     <span className={`text-xs font-bold px-2 py-1 rounded ${buzz.status === 'CORRECT' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                                         {buzz.status}
                                                     </span>
-                                                    {/* Correction Button for Wrong Answers */}
                                                     {buzz.status === 'WRONG' && (
                                                         <button 
                                                             onClick={() => rectifyBuzz(buzz.playerId, 'CORRECT')}
@@ -396,7 +385,58 @@ export const HostView: React.FC = () => {
               </div>
             )}
 
-            {/* PLAYERS TAB */}
+            {/* SETTINGS TAB */}
+            {activeTab === 'SETTINGS' && (
+                <div className="max-w-2xl mx-auto">
+                    <h2 className="text-2xl font-bold mb-6 text-slate-800">Host Configuration</h2>
+                    
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">Public Join URL</label>
+                            <input 
+                                type="text"
+                                className="w-full p-3 border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                value={settingsForm.joinUrl}
+                                onChange={e => setSettingsForm({ ...settingsForm, joinUrl: e.target.value })}
+                                placeholder="https://your-site.com/#player"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">This URL is encoded into the QR code shown to players.</p>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">Gemini API Key</label>
+                            <input 
+                                type="password"
+                                className="w-full p-3 border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
+                                value={settingsForm.apiKey}
+                                onChange={e => setSettingsForm({ ...settingsForm, apiKey: e.target.value })}
+                                placeholder="AIzaSy..."
+                            />
+                            <p className="text-xs text-slate-500 mt-1">Required for AI question generation.</p>
+                        </div>
+
+                        <div className="pt-4 border-t border-slate-100">
+                            <label className="block text-sm font-bold text-slate-700 mb-2">Change Host Password</label>
+                            <input 
+                                type="password"
+                                className="w-full p-3 border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                value={settingsForm.newPassword}
+                                onChange={e => setSettingsForm({ ...settingsForm, newPassword: e.target.value })}
+                                placeholder="Leave empty to keep current password"
+                            />
+                        </div>
+
+                        <button 
+                            onClick={handleSaveSettings}
+                            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-md flex items-center justify-center gap-2"
+                        >
+                            <Save size={18} /> Save Settings
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* PLAYERS & LIBRARY TABS */}
             {activeTab === 'PLAYERS' && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200">
                     <table className="w-full text-left">
@@ -427,225 +467,147 @@ export const HostView: React.FC = () => {
                     </table>
                 </div>
             )}
-
-            {/* GAME LIBRARY TAB */}
-            {activeTab === 'LIBRARY' && (
+            {activeTab === 'LIBRARY' && !editingGameId && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="col-span-full flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-slate-800">Your Games</h2>
+                        <div className="flex gap-2">
+                            <input value={newGameName} onChange={e => setNewGameName(e.target.value)} placeholder="New Game Name..." className="px-4 py-2 rounded border border-slate-300 text-sm text-black bg-white" />
+                            <button onClick={handleCreateGame} className="bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-indigo-700">Create</button>
+                        </div>
+                    </div>
+                    {games.map(game => (
+                        <div key={game.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h3 className="font-bold text-lg mb-1 text-slate-900">{game.name}</h3>
+                            <p className="text-sm text-slate-500 mb-4">{game.questions.length} Questions</p>
+                            <div className="flex gap-2 mt-2">
+                                <button onClick={() => setEditingGameId(game.id)} className="flex-1 py-2 bg-slate-100 text-slate-600 rounded text-sm font-bold flex items-center justify-center gap-2"><Edit size={14}/> Edit</button>
+                                <button onClick={() => handleLoadGame(game.id)} className="flex-1 py-2 bg-green-50 text-green-700 border border-green-200 rounded text-sm font-bold">Load</button>
+                                <button onClick={() => deleteGame(game.id)} className="p-2 text-red-400 hover:bg-red-50 rounded"><Trash2 size={16} /></button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+            {activeTab === 'LIBRARY' && editingGameId && (
                 <div className="space-y-6">
-                    {!editingGameId ? (
-                        /* MODE: LIST GAMES */
-                        <>
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-2xl font-bold text-slate-800">Your Games</h2>
-                                <div className="flex gap-2">
-                                    <input 
-                                        type="text" 
-                                        value={newGameName}
-                                        onChange={e => setNewGameName(e.target.value)}
-                                        placeholder="New Game Name..." 
-                                        className="px-4 py-2 rounded border border-slate-300 text-sm text-black bg-white"
-                                    />
+                    <button onClick={() => setEditingGameId(null)} className="flex items-center gap-2 text-slate-500 font-bold mb-4"><ArrowLeft size={16}/> Back to Library</button>
+                    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl p-6 text-white shadow-lg">
+                        <div className="flex items-center gap-2 mb-4"><Sparkles className="w-5 h-5" /><h3 className="font-bold text-lg">AI Generator</h3></div>
+                        <div className="flex gap-2">
+                            <input value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} placeholder="Topic..." className="flex-1 px-4 py-2 rounded text-slate-900 bg-white outline-none" />
+                            <button onClick={() => handleAiGenerate(editingGameId)} disabled={isGenerating} className="bg-white text-purple-700 px-4 py-2 rounded font-bold hover:bg-purple-50 disabled:opacity-50">{isGenerating ? '...' : 'Generate'}</button>
+                        </div>
+                    </div>
+                    
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+                        <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                            <h3 className="font-bold text-slate-700">Questions</h3>
+                            <button onClick={() => setIsAddingQuestion(!isAddingQuestion)} className="flex items-center gap-1 text-sm text-blue-600 font-bold hover:bg-blue-50 px-3 py-2 rounded"><Plus className="w-4 h-4" /> Add Manual</button>
+                        </div>
+                        
+                        {isAddingQuestion && (
+                            <div className="p-4 bg-slate-50 border-b border-slate-200">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs font-bold text-slate-500">Question</label>
+                                        <input 
+                                            placeholder="e.g. What is 2+2?" 
+                                            className="p-2 border rounded text-black bg-white"
+                                            value={manualQ.text}
+                                            onChange={e => setManualQ({...manualQ, text: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs font-bold text-slate-500">Answer</label>
+                                        <input 
+                                            placeholder="e.g. 4" 
+                                            className="p-2 border rounded text-black bg-white"
+                                            value={manualQ.answer}
+                                            onChange={e => setManualQ({...manualQ, answer: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs font-bold text-slate-500">Points</label>
+                                        <input 
+                                            type="number"
+                                            placeholder="10" 
+                                            className="p-2 border rounded text-black bg-white"
+                                            value={manualQ.points}
+                                            onChange={e => setManualQ({...manualQ, points: Number(e.target.value)})}
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs font-bold text-slate-500">Category</label>
+                                        <input 
+                                            placeholder="e.g. Math" 
+                                            className="p-2 border rounded text-black bg-white"
+                                            value={manualQ.category}
+                                            onChange={e => setManualQ({...manualQ, category: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1 md:col-span-2">
+                                        <label className="text-xs font-bold text-slate-500">Media</label>
+                                        <div className="flex gap-2">
+                                            <input 
+                                                type="text"
+                                                placeholder="YouTube Link or Image URL" 
+                                                className="flex-1 p-2 border rounded text-black bg-white"
+                                                value={manualQ.mediaUrl}
+                                                onChange={e => setManualQ({...manualQ, mediaUrl: e.target.value})}
+                                            />
+                                            <div className="relative">
+                                                <input 
+                                                    type="file" 
+                                                    accept="image/*"
+                                                    onChange={handleImageUpload}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                />
+                                                <button className="h-full px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded flex items-center gap-2">
+                                                    <Upload size={16} /> Upload Img
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400">Supports YouTube links or Image Uploads</p>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setIsAddingQuestion(false)} className="px-3 py-1 text-slate-500 text-sm">Cancel</button>
                                     <button 
-                                        onClick={handleCreateGame}
-                                        className="bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-indigo-700"
+                                        onClick={() => handleAddManualQuestion(editingGameId)}
+                                        className="px-3 py-1 bg-blue-600 text-white rounded text-sm font-bold"
                                     >
-                                        Create
+                                        Save Question
                                     </button>
                                 </div>
                             </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {games.map(game => (
-                                    <div key={game.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="h-12 w-12 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center">
-                                                <Library className="w-6 h-6" />
-                                            </div>
-                                            <div className="flex gap-1">
-                                                <button onClick={() => setEditingGameId(game.id)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded">
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => deleteGame(game.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <h3 className="font-bold text-lg mb-1 text-slate-900">{game.name}</h3>
-                                        <p className="text-sm text-slate-500 mb-4">{game.questions.length} Questions</p>
-                                        <button 
-                                            onClick={() => handleLoadGame(game.id)}
-                                            className="w-full py-2 bg-green-50 text-green-700 border border-green-200 rounded font-bold text-sm hover:bg-green-100 flex items-center justify-center gap-2"
-                                        >
-                                            <Upload className="w-4 h-4" /> LOAD TO LIVE
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </>
-                    ) : (
-                        /* MODE: EDIT GAME */
-                        (() => {
-                            const game = games.find(g => g.id === editingGameId);
-                            if (!game) return null;
+                        )}
 
-                            return (
-                                <div className="space-y-6">
-                                    <div className="flex items-center gap-4 mb-6">
-                                        <button onClick={() => setEditingGameId(null)} className="p-2 hover:bg-slate-200 rounded-full">
-                                            <ArrowLeft className="w-5 h-5 text-slate-600" />
-                                        </button>
-                                        <input 
-                                            value={game.name} 
-                                            onChange={e => updateGame(game.id, { name: e.target.value })}
-                                            className="text-2xl font-bold bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-600 focus:outline-none px-2 py-1 text-slate-900"
-                                        />
-                                        <span className="ml-auto text-sm text-slate-500">{game.questions.length} Questions</span>
-                                    </div>
-
-                                    {/* AI Generator for this game */}
-                                    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl p-6 text-white shadow-lg">
-                                        <div className="flex items-center gap-2 mb-4">
-                                            <Sparkles className="w-5 h-5" />
-                                            <h3 className="font-bold text-lg">AI Question Generator</h3>
+                        <ul className="divide-y divide-slate-100">
+                            {games.find(g => g.id === editingGameId)?.questions.map((q, i) => (
+                                <li key={q.id} className="p-4 hover:bg-slate-50 flex justify-between items-center group">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="font-bold text-slate-400 text-xs">Q{i+1}</span>
+                                            <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500">{q.category}</span>
+                                            <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-mono">{q.points}pts</span>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <input 
-                                                type="text" 
-                                                value={aiTopic}
-                                                onChange={(e) => setAiTopic(e.target.value)}
-                                                placeholder="e.g. 80s Movies, World Capitals, Pokemon" 
-                                                className="flex-1 px-4 py-2 rounded text-slate-900 bg-white outline-none"
-                                            />
-                                            <button 
-                                                onClick={() => handleAiGenerate(game.id)}
-                                                disabled={isGenerating}
-                                                className="bg-white text-purple-700 px-4 py-2 rounded font-bold hover:bg-purple-50 disabled:opacity-50"
-                                            >
-                                                {isGenerating ? 'Dreaming...' : 'Generate'}
-                                            </button>
+                                        <div className="font-medium text-slate-800 flex items-center gap-2">
+                                            {q.mediaUrl && <ImageIcon size={14} className="text-indigo-500" />}
+                                            {q.text}
                                         </div>
+                                        <div className="text-sm text-green-700">A: {q.answer}</div>
                                     </div>
-
-                                    <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-                                        <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                                            <h3 className="font-bold text-slate-700">Questions</h3>
-                                            <button 
-                                                onClick={() => setIsAddingQuestion(!isAddingQuestion)}
-                                                className="flex items-center gap-1 text-sm text-blue-600 font-bold hover:bg-blue-50 px-3 py-2 rounded"
-                                            >
-                                                <Plus className="w-4 h-4" /> Add Manual
-                                            </button>
-                                        </div>
-                                        
-                                        {/* Add Manual Form */}
-                                        {isAddingQuestion && (
-                                            <div className="p-4 bg-slate-50 border-b border-slate-200">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-xs font-bold text-slate-500">Question</label>
-                                                        <input 
-                                                            placeholder="e.g. What is 2+2?" 
-                                                            className="p-2 border rounded text-black bg-white"
-                                                            value={manualQ.text}
-                                                            onChange={e => setManualQ({...manualQ, text: e.target.value})}
-                                                        />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-xs font-bold text-slate-500">Answer</label>
-                                                        <input 
-                                                            placeholder="e.g. 4" 
-                                                            className="p-2 border rounded text-black bg-white"
-                                                            value={manualQ.answer}
-                                                            onChange={e => setManualQ({...manualQ, answer: e.target.value})}
-                                                        />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-xs font-bold text-slate-500">Points</label>
-                                                        <input 
-                                                            type="number"
-                                                            placeholder="10" 
-                                                            className="p-2 border rounded text-black bg-white"
-                                                            value={manualQ.points}
-                                                            onChange={e => setManualQ({...manualQ, points: Number(e.target.value)})}
-                                                        />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-xs font-bold text-slate-500">Category</label>
-                                                        <input 
-                                                            placeholder="e.g. Math" 
-                                                            className="p-2 border rounded text-black bg-white"
-                                                            value={manualQ.category}
-                                                            onChange={e => setManualQ({...manualQ, category: e.target.value})}
-                                                        />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1 md:col-span-2">
-                                                        <label className="text-xs font-bold text-slate-500">Media</label>
-                                                        <div className="flex gap-2">
-                                                            <input 
-                                                                type="text"
-                                                                placeholder="YouTube Link or Image URL" 
-                                                                className="flex-1 p-2 border rounded text-black bg-white"
-                                                                value={manualQ.mediaUrl}
-                                                                onChange={e => setManualQ({...manualQ, mediaUrl: e.target.value})}
-                                                            />
-                                                            <div className="relative">
-                                                                <input 
-                                                                    type="file" 
-                                                                    accept="image/*"
-                                                                    onChange={handleImageUpload}
-                                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                                                />
-                                                                <button className="h-full px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded flex items-center gap-2">
-                                                                    <Upload size={16} /> Upload Img
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                        <p className="text-[10px] text-slate-400">Supports YouTube links or Image Uploads</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex justify-end gap-2">
-                                                    <button onClick={() => setIsAddingQuestion(false)} className="px-3 py-1 text-slate-500 text-sm">Cancel</button>
-                                                    <button 
-                                                        onClick={() => handleAddManualQuestion(game.id)}
-                                                        className="px-3 py-1 bg-blue-600 text-white rounded text-sm font-bold"
-                                                    >
-                                                        Save Question
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <ul className="divide-y divide-slate-100">
-                                            {game.questions.length === 0 && (
-                                                <li className="p-8 text-center text-slate-400">No questions yet. Add some manually or use AI!</li>
-                                            )}
-                                            {game.questions.map((q, i) => (
-                                                <li key={q.id} className="p-4 hover:bg-slate-50 flex justify-between items-center group">
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <span className="font-bold text-slate-400 text-xs">Q{i+1}</span>
-                                                            <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500">{q.category}</span>
-                                                            <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-mono">{q.points}pts</span>
-                                                        </div>
-                                                        <div className="font-medium text-slate-800 flex items-center gap-2">
-                                                            {q.mediaUrl && <ImageIcon size={14} className="text-indigo-500" />}
-                                                            {q.text}
-                                                        </div>
-                                                        <div className="text-sm text-green-700">A: {q.answer}</div>
-                                                    </div>
-                                                    <button 
-                                                        onClick={() => handleDeleteQuestion(game.id, q.id)}
-                                                        className="opacity-0 group-hover:opacity-100 p-2 text-red-400 hover:text-red-600"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                </div>
-                            );
-                        })()
-                    )}
+                                    <button 
+                                        onClick={() => handleDeleteQuestion(editingGameId, q.id)}
+                                        className="opacity-0 group-hover:opacity-100 p-2 text-red-400 hover:text-red-600"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 </div>
             )}
 
